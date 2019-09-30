@@ -1,0 +1,86 @@
+case "${bamboo_deploy_environment}" in
+    poc5)
+      bamboo_deploy_capserver="ccpcap-po-c501-p.po.ccp.cable.comcast.com"
+      ;;
+    brc5)
+      bamboo_deploy_capserver="ccpcap-br-c501-p.br.ccp.cable.comcast.com"
+      ;;
+    xbodta002)
+      bamboo_deploy_capserver="ccpcap-dt-c001-i.dt.ccp.cable.comcast.com"
+      ;;
+    *)
+      exit 1
+esac
+
+export bamboo_deploy_environment bamboo_deploy_project bamboo_deploy_capserver bamboo_jacoco_version
+
+DEPLOY()
+{
+echo "running deployment subroutine"
+ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+
+     cd /home/xdeploy/${bamboo_deploy_environment}/trunk &&
+     if [ "`svn status -q`" == "" ] ; then echo "svn is up to date" ; else svn up ; fi &&
+     cd utils &&
+    ./little_button.show_serial_bamboo ${bamboo_deploy_project} certified ${JACOCO} ${bamboo_jacoco_version} &&
+    cat ./deploy_serial_${bamboo_deploy_project} &&
+    ./deploy_serial_${bamboo_deploy_project} ${bamboo_deploy_environment} &&
+    /bin/rm deploy_serial_${bamboo_deploy_project} &&
+    echo ""
+EOF
+}
+
+# lets check to see if jacoco listner is running, and if it is bail
+CHECKJACOCO()
+{
+    echo "running checkjacoco subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} "pgrep -f jacoco-it_${bamboo_deploy_project}"`
+    if [ "${check}" != "" ] ; then echo "jacoco listner is running exiting" ; exit 1 ; fi
+}
+
+
+case "${bamboo_jacoco_trigger}" in
+    stop) echo "deploying with jacoco turned off and then stopping jacoco"
+    export JACOCO=""
+    DEPLOY
+    ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      cd /home/xdeploy/svn/trunk/utils
+      ./start_stop_jacoco_server ${bamboo_deploy_project} stop 
+EOF
+     ;;
+    stop_listner) echo "stopping jacoco listner on the cap admin"
+    export JACOCO=""
+    ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      cd /home/xdeploy/svn/trunk/utils
+      ./start_stop_jacoco_server ${bamboo_deploy_project} stop 
+EOF
+     ;;
+
+     start) echo "deploying with jacoco turned on"
+     CHECKJACOCO
+     export JACOCO=jacoco
+     ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+        cd /home/xdeploy/${bamboo_deploy_environment}/trunk &&
+        echo "/home/xdeploy/svn/trunk/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}"
+        /home/xdeploy/svn/trunk/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}
+EOF
+
+     DEPLOY
+     ;;
+
+     start_listner) echo "starting jacoco listner on the cap admin"
+     CHECKJACOCO
+     export JACOCO=jacoco
+     ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+        cd /home/xdeploy/${bamboo_deploy_environment}/trunk &&
+        echo "/home/xdeploy/svn/trunk/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}"
+        /home/xdeploy/svn/trunk/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}
+EOF
+     ;;
+     
+     *) echo "running a normal deployment"
+     CHECKJACOCO
+     DEPLOY
+     ;;
+esac
+     

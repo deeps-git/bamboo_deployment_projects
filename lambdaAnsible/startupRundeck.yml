@@ -1,0 +1,48 @@
+---
+
+- hosts: localhost
+  become: true
+
+  tasks:
+
+    - name: Install tomcat
+      yum: name=apache-tomcat-ccp state=present
+      register: result
+    - debug: var=result.stdout
+
+    - name: Install JDK 
+      yum: name=jdk1.8.0_72 state=present
+    
+    - name: Install MySQL
+      yum: name={{ item }} state=present
+      with_items:
+        - mysql
+        - mysql-server
+        - gcc-c++
+        - MySQL-python
+        - mysql-libs
+        - mysql-server
+
+
+#    - name: install required python MySQLdb lib to create databases and users
+#      yum: name={{item}} state=present
+#      with_items:
+#        - gcc-c++
+#        - MySQL-python
+
+    - name: Start the MySQL service
+      action: service name=mysqld state=started enabled=yes
+
+    - name: Start Tomcat
+      service: name=tomcat state=started enabled=yes
+
+#    - name: Stop Tomcat
+#      service: name=tomcat state=stopped
+
+    - name: Install Rundeck
+      yum: name=rundeck state=present
+
+#    - name: Configure Rundeck
+
+    - name: Start Rundeck
+      action: service name=rundeckd state=started enabled=yes

@@ -1,0 +1,135 @@
+case "${bamboo_deploy_environment}" in
+    poc5)
+      bamboo_deploy_capserver="ccpcap-po-c501-p.po.ccp.cable.comcast.com"
+      ;;
+    brc5)
+      bamboo_deploy_capserver="ccpcap-br-c501-p.br.ccp.cable.comcast.com"
+      ;;
+    chi1_503)
+      bamboo_deploy_capserver="tvxcap-c1-c00002-g.ch.tvx.comcast.com"
+      ;;
+    xbodta002)
+      bamboo_deploy_capserver="ccpcap-dt-c001-i.dt.ccp.cable.comcast.com"
+      ;;
+    ch3v503)
+      bamboo_deploy_capserver="xbocap-c3-c00001-g.ch.tvx.comcast.com"
+      ;;
+    *)
+      echo "no deployment server set"
+      exit 1
+esac
+
+export bamboo_deploy_environment bamboo_deploy_project bamboo_deploy_capserver bamboo_jacoco_version
+
+DEPLOY()
+{
+echo "running deployment subroutine"
+ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+
+     if [ -d /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts ] ; then 
+       cd /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts
+       git checkout dev
+       git pull
+     else 
+       mkdir -p /home/xdeploy/xbo/git_bamboo
+       cd /home/xdeploy/xbo/git_bamboo
+       git clone git@github.comcast.com:xbo/xbo-ds-cap-scripts.git
+       cd /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts
+       git checkout dev
+     fi
+     cd utils &&
+    ./little_button.show_serial_bamboo ${bamboo_deploy_project} certified ${JACOCO} ${bamboo_jacoco_version} &&
+    ./deploy_serial_${bamboo_deploy_project} ${bamboo_deploy_environment} &&
+    /bin/rm deploy_serial_${bamboo_deploy_project} &&
+    echo ""
+EOF
+}
+
+CHECK_VERSIONS ()
+{
+ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+     cd /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts/utils &&
+    ./check_versions  ${bamboo_deploy_project} &&
+    echo ""
+EOF
+}
+
+# lets check to see if a deployment is already running, and if it is bail
+CHECKDEPLOYMENT()
+{
+    echo "running checkdeployment subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} 'pgrep -f "deploy app='${bamboo_deploy_project}' env='${bamboo_deploy_environment}'"'`
+    if [ "${check}" != "" ] ; then echo "there is a deployment running for "${bamboo_deploy_project} ; exit 1 ; fi
+}
+
+# lets check to see if jacoco listner is running, and if it is bail
+CHECKJACOCO()
+{
+    echo "running checkjacoco subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} "pgrep -f jacoco-it_${bamboo_deploy_project}"`
+    if [ "${check}" != "" ] ; then echo "jacoco listner is running exiting" ; exit 1 ; fi
+}
+
+# lets check to see if jacoco listner was started
+CHECKJACOCOUP()
+{
+    echo "running checkjacocoup subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} "pgrep -f jacoco-it_${bamboo_deploy_project}"`
+    if [ "${check}" == "" ] ; then echo "jacoco listner is not running exiting" ; exit 1 ; fi
+}
+
+
+case "${bamboo_jacoco_trigger}" in
+    stop) echo "deploying with jacoco turned off and then stopping jacoco"
+    export JACOCO=""
+    CHECKDEPLOYMENT
+    DEPLOY
+    ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      cd /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts
+      ./start_stop_jacoco_server ${bamboo_deploy_project} stop 
+EOF
+     CHECK_VERSIONS
+     ;;
+    stop_listner) echo "stopping jacoco listner on the cap admin"
+    export JACOCO=""
+    ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      cd /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts
+      ./start_stop_jacoco_server ${bamboo_deploy_project} stop 
+EOF
+     CHECK_VERSIONS
+     ;;
+
+     start) echo "deploying with jacoco turned on"
+     CHECKJACOCO
+     CHECKDEPLOYMENT
+     export JACOCO=jacoco
+     ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+        cd /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts && 
+        ./start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}
+EOF
+
+     DEPLOY
+     CHECK_VERSIONS
+     ;;
+
+     start_listner) echo "starting jacoco listner on the cap admin"
+     CHECKJACOCO
+     CHECKDEPLOYMENT
+     export JACOCO=jacoco
+     ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+        cd  /home/xdeploy/xbo/git_bamboo/xbo-ds-cap-scripts && 
+        echo "./start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}"
+        ./start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}
+EOF
+     CHECKJACOCOUP
+     CHECK_VERSIONS
+     ;;
+     
+     *) echo "running a normal deployment"
+     CHECKJACOCO
+     CHECKDEPLOYMENT
+     DEPLOY
+     CHECK_VERSIONS
+     ;;
+esac
+     

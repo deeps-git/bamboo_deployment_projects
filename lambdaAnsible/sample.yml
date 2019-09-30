@@ -1,0 +1,10 @@
+---
+
+- hosts: localhost
+
+  tasks:
+
+    - name: test
+      shell: echo "Good"
+      register: echoout
+    - debug: var=echoout.stdout 

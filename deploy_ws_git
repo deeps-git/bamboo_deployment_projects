@@ -1,0 +1,133 @@
+case "${bamboo_deploy_environment}" in
+    poc5xbo)
+      bamboo_deploy_capserver="ccpcap-po-c501-p.po.ccp.cable.comcast.com"
+      ;;
+    brc5xbo)
+      bamboo_deploy_capserver="ccpcap-br-c501-p.br.ccp.cable.comcast.com"
+      ;;
+    xbodta002)
+      bamboo_deploy_capserver="ccpcap-dt-c001-i.dt.ccp.cable.comcast.com"
+      ;;
+    *)
+      echo "no deployment server set"
+      exit 1
+esac
+
+export bamboo_deploy_environment bamboo_deploy_project bamboo_deploy_capserver bamboo_jacoco_version
+
+DEPLOY()
+{
+echo "running deployment subroutine"
+ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      
+     if [ -d /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts ] ; then 
+       cd /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts
+       git checkout dev
+       git pull
+     else 
+       mkdir -p /home/xdeploy/xbo/git_bamboo
+       cd /home/xdeploy/xbo/git_bamboo
+       git clone git@github.comcast.com:xbo/xbo-ws-cap-scripts.git
+       cd /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts
+       git checkout dev
+     fi
+
+     cd /home/xdeploy/utils/${bamboo_deploy_environment} &&
+    echo "./little_button.show_serial_bamboo_git ${bamboo_deploy_project} certified ${JACOCO} ${bamboo_jacoco_version}" 
+    ./little_button.show_serial_bamboo_git ${bamboo_deploy_project} certified ${JACOCO} ${bamboo_jacoco_version} &&
+    echo "./deploy_serial_${bamboo_deploy_project} ${bamboo_deploy_environment}"
+    ./deploy_serial_${bamboo_deploy_project} ${bamboo_deploy_environment} &&
+    /bin/rm deploy_serial_${bamboo_deploy_project} &&
+    echo ""
+EOF
+}
+
+CHECK_VERSIONS ()
+{
+ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+     cd /home/xdeploy/utils/${bamboo_deploy_environment} &&
+    ./check_versions  ${bamboo_deploy_project} certified &&
+    echo ""
+EOF
+}
+
+# lets check to see if a deployment is already running, and if it is bail
+CHECKDEPLOYMENT()
+{
+    echo "running checkdeployment subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} "pgrep -f deploy_${bamboo_deploy_project}"`
+    if [ "${check}" != "" ] ; then echo "there is a deployment running for "${bamboo_deploy_project} ; exit 1 ; fi
+}
+
+# lets check to see if jacoco listner is running, and if it is bail
+CHECKJACOCO()
+{
+    echo "running checkjacoco subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} "pgrep -f jacoco-it_${bamboo_deploy_project}"`
+    if [ "${check}" != "" ] ; then echo "jacoco listner is running exiting" ; exit 1 ; fi
+}
+
+# lets check to see if jacoco listner was started
+CHECKJACOCOUP()
+{
+    echo "running checkjacocoup subroutine"
+    check=`ssh -q xdeploy@${bamboo_deploy_capserver} "pgrep -f jacoco-it_${bamboo_deploy_project}"`
+    if [ "${check}" == "" ] ; then echo "jacoco listner is not running exiting" ; exit 1 ; fi
+}
+
+
+case "${bamboo_jacoco_trigger}" in
+    stop) echo "deploying with jacoco turned off and then stopping jacoco"
+    export JACOCO=""
+    CHECKDEPLOYMENT
+    DEPLOY
+    ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      cd /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts/utils
+      ./start_stop_jacoco_server ${bamboo_deploy_project} stop 
+EOF
+     CHECK_VERSIONS
+     ;;
+
+    stop_listner) echo "stopping jacoco listner on the cap admin"
+    export JACOCO=""
+    ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+      cd /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts/utils
+      ./start_stop_jacoco_server ${bamboo_deploy_project} stop 
+EOF
+     CHECK_VERSIONS
+     ;;
+
+     start) echo "deploying with jacoco turned on"
+     CHECKJACOCO
+     CHECKDEPLOYMENT
+     export JACOCO=jacoco
+     ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+        cd /home/xdeploy/utils/${bamboo_deploy_environment} 
+        /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}
+EOF
+
+     DEPLOY
+     CHECK_VERSIONS 
+     ;;
+     
+     start_listner) echo "starting jacoco listner on the cap admin"
+     CHECKJACOCO
+     CHECKDEPLOYMENT
+     export JACOCO=jacoco
+     ssh -T -q xdeploy@${bamboo_deploy_capserver} << EOF
+        cd /home/xdeploy/utils/${bamboo_deploy_environment} 
+        echo "/home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}"
+        /home/xdeploy/xbo/git_bamboo/xbo-ws-cap-scripts/utils/start_stop_jacoco_server ${bamboo_deploy_project} start ${bamboo_jacoco_version}
+EOF
+     CHECKJACOCOUP
+     CHECK_VERSIONS 
+     ;;
+     
+     *) echo "running a normal deployment"
+     CHECKJACOCO
+     CHECKDEPLOYMENT
+     DEPLOY
+     CHECK_VERSIONS 
+     ;;
+esac
+     
