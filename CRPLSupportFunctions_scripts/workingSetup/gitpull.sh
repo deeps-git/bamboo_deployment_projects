@@ -1,6 +1,6 @@
 #!/bin/bash
-sudo mkdir -p ${BUILD_BASE_PATH}/${BUILD_DIR}/
-sudo chown -R crpl ${BUILD_BASE_PATH}/${BUILD_DIR}
+mkdir -p ${BUILD_BASE_PATH}/${BUILD_DIR}/
+chown -R dkumar253 ${BUILD_BASE_PATH}/${BUILD_DIR}
 cd ${BUILD_BASE_PATH}/${BUILD_DIR}/
 echo "$(pwd)"
 shopt -s dotglob
