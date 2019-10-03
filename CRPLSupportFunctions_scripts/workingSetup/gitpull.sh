@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "${BUILD_BASE_PATH}/${BUILD_DIR}/"
+echo "my new dir is ${BUILD_BASE_PATH}/${BUILD_DIR}/"
 //mkdir -p ${BUILD_BASE_PATH}/${BUILD_DIR}/
 //chown -R dkumar253 ${BUILD_BASE_PATH}/${BUILD_DIR}
 cd ${BUILD_BASE_PATH}/${BUILD_DIR}/
