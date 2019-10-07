@@ -9,7 +9,7 @@ sudo rm -r *
 
 echo "====================================================="
 echo "Cloning ${BUILD_SCRIPTS_REPO} at $(pwd)"
-git clone https://github.com/deeps-git/${BUILD_SCRIPTS_REPO}.git ${BUILD_SCRIPTS_REPO}
+git clone git@github.comcast.com:deeps-git/${BUILD_SCRIPTS_REPO}.git ${BUILD_SCRIPTS_REPO}
 pushd ${BUILD_SCRIPTS_REPO}
 git pull origin dev
 git show-ref | head -3
@@ -17,7 +17,7 @@ popd
 
 echo "====================================================="
 echo "Cloning ${REPO_TO_BUILD} at $(pwd)"
-git clone https://github.com/deeps-git/${REPO_TO_BUILD}.git ${REPO_TO_BUILD}
+git clone git@github.comcast.com:deeps-git/${REPO_TO_BUILD}.git ${REPO_TO_BUILD}
 pushd ${REPO_TO_BUILD}
 git pull origin dev
 git show-ref | head -3
