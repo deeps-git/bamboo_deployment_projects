@@ -18,10 +18,10 @@ popd
 echo "====================================================="
 echo "Cloning ${REPO_TO_BUILD} at $(pwd)"
 git clone https://github.com/deeps-git/${REPO_TO_BUILD}.git ${REPO_TO_BUILD}
-pushd ${REPO_TO_BUILD}
+//pushd ${REPO_TO_BUILD}
 git pull origin master
 git show-ref | head -3
-popd
+//popd
 
 
 
